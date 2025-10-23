@@ -150,8 +150,6 @@ func addServerInfo(addr *net.UDPAddr, reader *bytes.Reader) {
 		binary.Read(reader, binary.LittleEndian, &srv.players[i].ping)
 		binary.Read(reader, binary.LittleEndian, &srv.players[i].team)
 	}
-
-	// fmt.Println("server info: &v", srv)
 }
 
 func sendServerInfo(addr *net.UDPAddr, conn *net.UDPConn) {
@@ -171,20 +169,13 @@ func sendServerInfo(addr *net.UDPAddr, conn *net.UDPConn) {
 			continue
 		}
 
-		ip := server.addr.IP
-		localhost := net.IPv4(127, 0, 0, 1)
-		if ip.Equal(localhost) {
-			ip = net.IPv4(192, 168, 0, 90)
-		}
+		ip := server.addr.IP.To4()
 		port := uint16(server.addr.Port)
-		for i := 12; i < 16; i++ {
-			binary.Write(buf, binary.LittleEndian, ip[i])
+		for _, octet := range ip {
+			binary.Write(buf, binary.LittleEndian, octet)
 		}
 		binary.Write(buf, binary.LittleEndian, port)
 	}
-
-	fmt.Printf("server buffer: %v\n", buf.Bytes())
-	fmt.Printf("server addr: %v\n", addr)
 
 	conn.WriteToUDP(buf.Bytes(), addr)
 }
