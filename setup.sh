@@ -30,6 +30,7 @@ if ! id -u odamaster &>/dev/null; then
     sudo useradd -r -s /usr/sbin/nologin -d /opt/odamaster odamaster
 fi
 sudo install -m 0700 -o odamaster -g odamaster -d /opt/odamaster
+sudo install -m 0700 -o odamaster -g odamaster -d /opt/odamaster/bin
 sudo install -T -m 644 -o root -g root "$script_dir/systemd-units/odamaster.service"        "/etc/systemd/system/odamaster.service"
 sudo install -T -m 644 -o root -g root "$script_dir/systemd-units/odamaster-update.service" "/etc/systemd/system/odamaster-update.service"
 sudo install -T -m 644 -o root -g root "$script_dir/systemd-units/odamaster-update.timer"   "/etc/systemd/system/odamaster-update.timer"
@@ -40,7 +41,6 @@ if [[ -d /opt/odamaster/repo/.git ]]; then
 else
     sudo -u odamaster git clone https://github.com/electricbrass/godamaster.git /opt/odamaster/repo
 fi
-sudo -u odamaster mkdir /opt/odamaster/bin
 sudo -u odamaster go build -o /opt/odamaster/bin/odamaster -C /opt/odamaster/repo
 sudo systemctl daemon-reload
 sudo systemctl enable --now odamaster-update.timer
