@@ -16,8 +16,8 @@ const MASTER_PORT = 15000
 const MAX_SERVERS = 1024
 const MAX_SERVERS_PER_IP = 64
 
-// const MAX_SERVER_AGE =
-// const MAX_UNVERIFIED_SERVER_AGE =
+const MAX_SERVER_AGE = time.Minute * 5
+const MAX_UNVERIFIED_SERVER_AGE = time.Minute
 
 const SERVER_CHALLENGE = 5560020
 const LAUNCHER_CHALLENGE = 777123
@@ -234,9 +234,25 @@ func pingServers(conn *net.UDPConn) {
 	}
 }
 
-// func cullServers() {
-// 	to_cull := make([]string, 0);
-// }
+func cullServers() {
+	to_cull := make([]string, 0)
+	for addr, server := range servers {
+		if server.verified {
+			if time.Since(server.age) > MAX_SERVER_AGE {
+				to_cull = append(to_cull, addr)
+				slog.Info("Server timed out.")
+			}
+		} else {
+			if time.Since(server.age) > MAX_UNVERIFIED_SERVER_AGE {
+				to_cull = append(to_cull, addr)
+				slog.Info("Unverified server timed out.")
+			}
+		}
+	}
+	for _, addr := range to_cull {
+		delete(servers, addr)
+	}
+}
 
 func main() {
 	conn, err := net.ListenUDP("udp4", &net.UDPAddr{Port: MASTER_PORT})
@@ -259,6 +275,7 @@ func main() {
 			continue
 		}
 		handlePacket(n, addr, conn, bytes.NewReader(buf[:n]))
+		cullServers()
 		if time.Now().After(next_ping) {
 			pingServers(conn)
 			next_ping = time.Now().Add(time.Second * 5)
