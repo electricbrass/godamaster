@@ -30,6 +30,8 @@ if ! git diff --quiet HEAD origin/main; then
     echo "New commits detected, rebuilding..."
     git reset --hard origin/main
     go build -o /opt/odamaster/bin/odamaster main.go
+    exit 0
 else
     echo "No updates."
+    exit 2
 fi
