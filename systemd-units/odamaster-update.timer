@@ -15,7 +15,7 @@ Description=Periodic Odamex Master Server update check
 
 [Timer]
 OnBootSec=15min
-OnUnitActiveSec=24h
+OnUnitActiveSec=1min
 
 [Install]
 WantedBy=timers.target
