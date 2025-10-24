@@ -41,7 +41,7 @@ if [[ -d /opt/odamaster/repo/.git ]]; then
 else
     sudo -u odamaster git clone https://github.com/electricbrass/godamaster.git /opt/odamaster/repo
 fi
-sudo -u odamaster go build -o /opt/odamaster/bin/odamaster -C /opt/odamaster/repo
+sudo -u odamaster go build -C /opt/odamaster/repo -o /opt/odamaster/bin/odamaster
 sudo systemctl daemon-reload
 sudo systemctl enable --now odamaster-update.timer
 sudo systemctl enable --now odamaster.service
