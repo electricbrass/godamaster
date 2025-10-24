@@ -33,5 +33,5 @@ if ! git diff --quiet HEAD origin/main; then
     exit 0
 else
     echo "No updates."
-    exit 2
+    exit 10
 fi
