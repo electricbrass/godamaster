@@ -1,3 +1,15 @@
+// Copyright (C) 2025 Mia McMahill
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
 package main
 
 import (
@@ -240,12 +252,12 @@ func cullServers() {
 		if server.verified {
 			if time.Since(server.age) > MAX_SERVER_AGE {
 				to_cull = append(to_cull, addr)
-				slog.Info("Server timed out.")
+				slog.Info("Server timed out.", "address", addr)
 			}
 		} else {
 			if time.Since(server.age) > MAX_UNVERIFIED_SERVER_AGE {
 				to_cull = append(to_cull, addr)
-				slog.Info("Unverified server timed out.")
+				slog.Info("Unverified server timed out.", "address", addr)
 			}
 		}
 	}
