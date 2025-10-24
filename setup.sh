@@ -29,7 +29,7 @@ fi
 if ! id -u odamaster &>/dev/null; then
     sudo useradd -r -s /usr/sbin/nologin -d /opt/odamaster odamaster
 fi
-sudo install -m 0700 -o odamaster -g odamaster -d /opt/odamaster
+sudo install -m 0755 -o odamaster -g odamaster -d /opt/odamaster
 sudo install -m 0700 -o odamaster -g odamaster -d /opt/odamaster/bin
 sudo install -T -m 644 -o root -g root "$script_dir/systemd-units/odamaster.service"        "/etc/systemd/system/odamaster.service"
 sudo install -T -m 644 -o root -g root "$script_dir/systemd-units/odamaster-update.service" "/etc/systemd/system/odamaster-update.service"
