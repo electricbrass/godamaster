@@ -21,12 +21,11 @@ import (
 	"net"
 	"os"
 	"time"
+
+	"github.com/electricbrass/godamaster/internal/serverlist"
 )
 
 const MASTER_PORT = 15000
-
-const MAX_SERVERS = 1024
-const MAX_SERVERS_PER_IP = 64
 
 const MAX_SERVER_AGE = time.Minute * 5
 const MAX_UNVERIFIED_SERVER_AGE = time.Minute
@@ -36,67 +35,28 @@ const LAUNCHER_CHALLENGE = 777123
 
 const MAX_UDP_PACKET_SIZE = 1400
 
-type player struct {
-	name  string
-	frags int16
-	ping  int32
-	team  byte
-}
-
-type server struct {
-	addr net.UDPAddr
-	age  time.Time
-
-	// server data
-	hostname   string
-	numplayers byte
-	maxplayers byte
-	curmap     string
-	pwads      []string
-	gametype   byte
-	skill      byte
-	teamplay   byte
-	ctfmode    byte
-	players    []player
-
-	key_sent uint32
-	verified bool
-	pinged   bool
-}
-
-var servers map[string]*server
-var addresses map[string]map[int]*server
+var serverList *serverlist.ServerList
 
 func addServer(addr *net.UDPAddr) {
-	strAddr := addr.String()
-	strIP := addr.IP.String()
-	srv := servers[strAddr]
+	server := serverList.GetServer(addr)
 
 	// server already exists?
-	if srv != nil {
-		srv.age = time.Now()
-		srv.pinged = false
+	if server != nil {
+		server.Age = time.Now()
+		server.Pinged = false
 		slog.Debug("Refreshed server", "address", addr)
 		return
 	}
 
-	srv = &server{
-		addr: *addr,
-		age:  time.Now(),
+	server = &serverlist.Server{
+		Addr: *addr,
+		Age:  time.Now(),
 	}
 
-	if servers == nil {
-		servers = make(map[string]*server)
+	err := serverList.AddServer(server)
+	if err != nil {
+		// log this
 	}
-	servers[strAddr] = srv
-
-	if addresses == nil {
-		addresses = make(map[string]map[int]*server)
-	}
-	if addresses[strIP] == nil {
-		addresses[strIP] = make(map[int]*server)
-	}
-	addresses[strIP][addr.Port] = srv
 }
 
 func readString(reader *bytes.Reader) string {
@@ -113,13 +73,13 @@ func readString(reader *bytes.Reader) string {
 }
 
 func addServerInfo(addr *net.UDPAddr, reader *bytes.Reader) {
-	srv := servers[addr.String()]
-	if srv == nil {
+	server := serverList.GetServer(addr)
+	if server == nil {
 		slog.Warn("Received server info from unknown server", "address", addr)
 		return
 	}
 
-	if srv.key_sent == 0 {
+	if server.KeySent == 0 {
 		slog.Warn("Received server info from server without key", "address", addr)
 		return
 	}
@@ -129,38 +89,38 @@ func addServerInfo(addr *net.UDPAddr, reader *bytes.Reader) {
 	var key_sent uint32
 	binary.Read(reader, binary.LittleEndian, &key_sent)
 
-	if srv.key_sent != key_sent {
+	if server.KeySent != key_sent {
 		slog.Warn("Received server info with mismatched key", "address", addr)
 		return
 	}
 
-	srv.verified = true
-	srv.age = time.Now()
+	server.Verified = true
+	server.Age = time.Now()
 
-	srv.hostname = readString(reader)
-	binary.Read(reader, binary.LittleEndian, &srv.numplayers)
-	binary.Read(reader, binary.LittleEndian, &srv.maxplayers)
-	srv.curmap = readString(reader)
+	server.Hostname = readString(reader)
+	binary.Read(reader, binary.LittleEndian, &server.Numplayers)
+	binary.Read(reader, binary.LittleEndian, &server.Maxplayers)
+	server.Curmap = readString(reader)
 	var numpwads byte
 	binary.Read(reader, binary.LittleEndian, &numpwads)
 
-	srv.pwads = make([]string, numpwads)
-	for i := range srv.pwads {
-		srv.pwads[i] = readString(reader)
+	server.Pwads = make([]string, numpwads)
+	for i := range server.Pwads {
+		server.Pwads[i] = readString(reader)
 	}
 
-	binary.Read(reader, binary.LittleEndian, &srv.gametype)
-	binary.Read(reader, binary.LittleEndian, &srv.skill)
-	binary.Read(reader, binary.LittleEndian, &srv.teamplay)
-	binary.Read(reader, binary.LittleEndian, &srv.ctfmode)
+	binary.Read(reader, binary.LittleEndian, &server.Gametype)
+	binary.Read(reader, binary.LittleEndian, &server.Skill)
+	binary.Read(reader, binary.LittleEndian, &server.Teamplay)
+	binary.Read(reader, binary.LittleEndian, &server.Ctfmode)
 
-	srv.players = make([]player, srv.numplayers)
-	for i := range srv.players {
-		srv.players[i] = player{}
-		srv.players[i].name = readString(reader)
-		binary.Read(reader, binary.LittleEndian, &srv.players[i].frags)
-		binary.Read(reader, binary.LittleEndian, &srv.players[i].ping)
-		binary.Read(reader, binary.LittleEndian, &srv.players[i].team)
+	server.Players = make([]serverlist.Player, server.Numplayers)
+	for i := range server.Players {
+		server.Players[i] = serverlist.Player{}
+		server.Players[i].Name = readString(reader)
+		binary.Read(reader, binary.LittleEndian, &server.Players[i].Frags)
+		binary.Read(reader, binary.LittleEndian, &server.Players[i].Ping)
+		binary.Read(reader, binary.LittleEndian, &server.Players[i].Team)
 	}
 }
 
@@ -169,20 +129,20 @@ func sendServerInfo(addr *net.UDPAddr, conn *net.UDPConn) {
 
 	binary.Write(buf, binary.LittleEndian, uint32(LAUNCHER_CHALLENGE))
 	var verified_count int16
-	for _, server := range servers {
-		if server.verified {
+	for server := range serverList.Servers() {
+		if server.Verified {
 			verified_count++
 		}
 	}
 	binary.Write(buf, binary.LittleEndian, verified_count)
 
-	for _, server := range servers {
-		if !server.verified {
+	for server := range serverList.Servers() {
+		if !server.Verified {
 			continue
 		}
 
-		ip := server.addr.IP.To4()
-		port := uint16(server.addr.Port)
+		ip := server.Addr.IP.To4()
+		port := uint16(server.Addr.Port)
 		for _, octet := range ip {
 			binary.Write(buf, binary.LittleEndian, octet)
 		}
@@ -230,39 +190,39 @@ func handlePacket(n int, addr *net.UDPAddr, conn *net.UDPConn, reader *bytes.Rea
 }
 
 func pingServers(conn *net.UDPConn) {
-	for _, server := range servers {
-		if server.pinged && !server.verified {
+	for server := range serverList.Servers() {
+		if server.Pinged && !server.Verified {
 			continue
 		}
-		server.key_sent = rand.Uint32N(0x7fffffff)
+		server.KeySent = rand.Uint32N(0x7fffffff)
 
 		buf := new(bytes.Buffer)
 		binary.Write(buf, binary.LittleEndian, uint32(LAUNCHER_CHALLENGE))
-		binary.Write(buf, binary.LittleEndian, server.key_sent)
+		binary.Write(buf, binary.LittleEndian, server.KeySent)
 
-		conn.WriteToUDP(buf.Bytes(), &server.addr)
+		conn.WriteToUDP(buf.Bytes(), &server.Addr)
 
-		server.pinged = true
+		server.Pinged = true
 	}
 }
 
 func cullServers() {
-	to_cull := make([]string, 0)
-	for addr, server := range servers {
-		if server.verified {
-			if time.Since(server.age) > MAX_SERVER_AGE {
-				to_cull = append(to_cull, addr)
-				slog.Info("Server timed out.", "address", addr)
+	to_cull := make([]*serverlist.Server, 0)
+	for server := range serverList.Servers() {
+		if server.Verified {
+			if time.Since(server.Age) > MAX_SERVER_AGE {
+				to_cull = append(to_cull, server)
+				slog.Info("Server timed out.", "address", server.Addr)
 			}
 		} else {
-			if time.Since(server.age) > MAX_UNVERIFIED_SERVER_AGE {
-				to_cull = append(to_cull, addr)
-				slog.Info("Unverified server timed out.", "address", addr)
+			if time.Since(server.Age) > MAX_UNVERIFIED_SERVER_AGE {
+				to_cull = append(to_cull, server)
+				slog.Info("Unverified server timed out.", "address", server.Addr)
 			}
 		}
 	}
-	for _, addr := range to_cull {
-		delete(servers, addr)
+	for _, server := range to_cull {
+		serverList.RemoveServer(server)
 	}
 }
 
@@ -277,6 +237,7 @@ func main() {
 	slog.Info("Odamex Master Started.")
 
 	buf := make([]byte, MAX_UDP_PACKET_SIZE)
+	serverList = serverlist.New()
 
 	next_ping := time.Now().Add(time.Second * 5)
 
