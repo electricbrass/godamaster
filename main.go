@@ -55,17 +55,18 @@ func addServer(addr *net.UDPAddr) {
 
 	err := serverList.AddServer(server)
 	if err != nil {
-		// log this
+		slog.Warn("Failed to add server", "address", addr, "error", err)
+	} else {
+		slog.Info("New server registered", "address", addr, "total", serverList.Size())
 	}
 }
 
 func readString(reader *bytes.Reader) string {
 	buf := make([]byte, 0)
-	var char byte
-	var err error
-	for char = 7; char != 0; char, err = reader.ReadByte() {
-		if err != nil {
-			//
+	for {
+		char, err := reader.ReadByte()
+		if err != nil || char == 0 {
+			break
 		}
 		buf = append(buf, char)
 	}
@@ -86,10 +87,10 @@ func addServerInfo(addr *net.UDPAddr, reader *bytes.Reader) {
 
 	var discard uint32
 	binary.Read(reader, binary.LittleEndian, &discard)
-	var key_sent uint32
-	binary.Read(reader, binary.LittleEndian, &key_sent)
+	var keySent uint32
+	binary.Read(reader, binary.LittleEndian, &keySent)
 
-	if server.KeySent != key_sent {
+	if server.KeySent != keySent {
 		slog.Warn("Received server info with mismatched key", "address", addr)
 		return
 	}
@@ -156,8 +157,10 @@ func handlePacket(n int, addr *net.UDPAddr, conn *net.UDPConn, reader *bytes.Rea
 	var challenge uint32
 	err := binary.Read(reader, binary.LittleEndian, &challenge)
 	if err != nil {
-		// do something with error
+		slog.Error("Failed to read challenge", "error", err)
+		return
 	}
+	slog.Debug("Received packet", "address", addr, "challenge", challenge, "packetlen", n)
 	switch challenge {
 	case 0: // the c++ and python code have this, not sure why
 	case SERVER_CHALLENGE:
@@ -167,22 +170,23 @@ func handlePacket(n int, addr *net.UDPAddr, conn *net.UDPConn, reader *bytes.Rea
 			var port uint16
 			err := binary.Read(reader, binary.LittleEndian, &port)
 			if err != nil {
-				// do something with error
+				slog.Warn("Failed to read server port", "error", err)
+				return
 			}
-			slog.Info("Received server challenge", "port", port)
+			slog.Info("Received server heartbeat", "address", addr, "port", port)
 			addr.Port = int(port)
 			addServer(addr)
 		} else if reader.Len() > 2 {
 			// new server pinging master
-			slog.Info("hey new server info")
+			slog.Info("Received server info", "address", addr)
 			addServerInfo(addr, reader)
 		} else {
 			// invalid packet, give error or warning
-			slog.Warn("Received invalid server challenge.")
+			slog.Warn("Received invalid server challenge")
 		}
 	case LAUNCHER_CHALLENGE:
 		// actually handle launcher challenge
-		slog.Info("Hey a launcher challenge.")
+		slog.Info("Launcher requested list", "address", addr)
 		sendServerInfo(addr, conn)
 	default:
 		slog.Warn("Received unknown challenge", "challenge", challenge)
@@ -212,12 +216,12 @@ func cullServers() {
 		if server.Verified {
 			if time.Since(server.Age) > MAX_SERVER_AGE {
 				to_cull = append(to_cull, server)
-				slog.Info("Server timed out.", "address", server.Addr)
+				slog.Info("Server timed out", "address", server.Addr)
 			}
 		} else {
 			if time.Since(server.Age) > MAX_UNVERIFIED_SERVER_AGE {
 				to_cull = append(to_cull, server)
-				slog.Info("Unverified server timed out.", "address", server.Addr)
+				slog.Info("Unverified server timed out", "address", server.Addr)
 			}
 		}
 	}

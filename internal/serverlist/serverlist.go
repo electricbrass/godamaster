@@ -14,6 +14,7 @@ package serverlist
 
 import (
 	"errors"
+	"fmt"
 	"iter"
 	"maps"
 	"net"
@@ -72,7 +73,7 @@ func (list *ServerList) AddServer(server *Server) error {
 		return errors.New("Max servers reached")
 	}
 	if list.ReachedMaxServersForIP(&server.Addr.IP) {
-		return errors.New("Max servers per IP reached")
+		return errors.New(fmt.Sprintf("Max servers reached for IP %v", server.Addr.IP))
 	}
 
 	ip := server.Addr.IP.String()
