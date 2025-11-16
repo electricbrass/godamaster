@@ -159,7 +159,7 @@ func (list *ServerList) ToCSV(filepath string) error {
 			fmt.Sprintf("%d/%d", server.Numplayers, server.Maxplayers),
 			pwads,
 			gametype,
-			server.Addr.String(),
+			fmt.Sprintf("%s:%d", server.Addr.IP.String(), server.Addr.Port),
 		}
 
 		err = w.Write(row)
