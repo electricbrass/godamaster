@@ -76,7 +76,7 @@ func (list *ServerList) AddServer(server *Server) error {
 		return errors.New("Max servers reached")
 	}
 	if list.ReachedMaxServersForIP(&server.Addr.IP) {
-		return errors.New(fmt.Sprintf("Max servers reached for IP %v", server.Addr.IP))
+		return fmt.Errorf("Max servers reached for IP %v", server.Addr.IP)
 	}
 
 	ip := server.Addr.IP.String()
@@ -159,7 +159,7 @@ func (list *ServerList) ToCSV(filepath string) error {
 			fmt.Sprintf("%d/%d", server.Numplayers, server.Maxplayers),
 			pwads,
 			gametype,
-			server.Addr.IP.To4().String(),
+			server.Addr.String(),
 		}
 
 		err = w.Write(row)
