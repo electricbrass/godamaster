@@ -13,11 +13,14 @@
 package serverlist
 
 import (
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"iter"
 	"maps"
 	"net"
+	"os"
+	"strings"
 	"time"
 )
 
@@ -112,4 +115,58 @@ func (list *ServerList) ReachedMaxServersForIP(ip *net.IP) bool {
 		return false
 	}
 	return len(list.addresses[ip.String()]) >= MAX_SERVERS_PER_IP
+}
+
+func (list *ServerList) ToCSV(filepath string) error {
+	f, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	w := csv.NewWriter(f)
+	defer w.Flush()
+	headers := []string{"Name", "Map", "Players/Max", "WADs", "Gametype", "Address:Port"}
+	err = w.Write(headers)
+	if err != nil {
+		return err
+	}
+
+	for _, server := range list.servers {
+		if !server.Verified {
+			continue
+		}
+		var gametype string
+		switch {
+		case server.Ctfmode == 1:
+			gametype = "CTF"
+		case server.Gametype == 1 && server.Teamplay == 1:
+			gametype = "TEAM DM"
+		case server.Gametype == 0:
+			gametype = "COOP"
+		default:
+			gametype = "DM"
+		}
+
+		pwads := strings.Join(server.Pwads, " ")
+		if pwads == "" {
+			pwads = " "
+		}
+
+		row := []string{
+			server.Hostname,
+			server.Curmap,
+			fmt.Sprintf("%d/%d", server.Numplayers, server.Maxplayers),
+			pwads,
+			gametype,
+			server.Addr.IP.To4().String(),
+		}
+
+		err = w.Write(row)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

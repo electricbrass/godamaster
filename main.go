@@ -15,11 +15,13 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"flag"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/electricbrass/godamaster/internal/serverlist"
@@ -230,6 +232,28 @@ func cullServers() {
 	}
 }
 
+func dumpServerListToFile(dir string) {
+	if dir == "" {
+		return
+	}
+
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		slog.Error("Failed to get absolute path", "error", err)
+		return
+	}
+
+	if err := os.MkdirAll(abs, 0755); err != nil {
+		slog.Error("Failed to create directory", "error", err)
+		return
+	}
+
+	err = serverList.ToCSV(filepath.Join(abs, "serverlist.csv"))
+	if err != nil {
+		slog.Error("Failed to write serverlist.csv", "error", err)
+		return
+	}
+}
 func main() {
 	conn, err := net.ListenUDP("udp4", &net.UDPAddr{Port: MASTER_PORT})
 	if err != nil {
@@ -237,6 +261,9 @@ func main() {
 		os.Exit(1)
 	}
 	defer conn.Close()
+
+	serverFile := flag.String("filedir", "", "Directory to write serverlist.csv to")
+	flag.Parse()
 
 	slog.Info("Odamex Master Started.")
 
@@ -254,6 +281,7 @@ func main() {
 		handlePacket(n, addr, conn, bytes.NewReader(buf[:n]))
 		cullServers()
 		if time.Now().After(next_ping) {
+			dumpServerListToFile(*serverFile)
 			pingServers(conn)
 			next_ping = time.Now().Add(time.Second * 5)
 		}
